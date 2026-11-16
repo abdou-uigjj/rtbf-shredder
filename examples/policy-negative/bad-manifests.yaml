@@ -1,0 +1,95 @@
+---
+# deliberately bad manifests - every line violates one policy rule.
+# CI requires conftest to REJECT this file; if it passes, the policy
+# pack guards nothing.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: rtbf-bad
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: bad-shredder
+  labels: {}
+spec:
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          automountServiceAccountToken: true
+          restartPolicy: Never
+          containers:
+            - name: shredder
+              image: ghcr.io/abdou-uigjj/rtbf-shredder:latest
+              securityContext:
+                privileged: true
+                allowPrivilegeEscalation: true
+                readOnlyRootFilesystem: false
+              volumeMounts:
+                - name: scratch
+                  mountPath: /scratch
+          volumes:
+            - name: scratch
+              hostPath:
+                path: /vault
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: bad-schedule
+  labels:
+    app: rtbf-shredder
+spec:
+  schedule: "* * * * *"
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          automountServiceAccountToken: false
+          securityContext:
+            runAsNonRoot: true
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+            - name: shredder
+              image: ghcr.io/abdou-uigjj/rtbf-shredder
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                runAsUser: 0
+                capabilities:
+                  drop:
+                    - NET_BIND_SERVICE
+              resources: {}
+          volumes:
+            - name: scratch
+              emptyDir: {}
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: plaintext-keys
+  namespace: rtbf-bad
+type: Opaque
+stringData:
+  master-key: "this-should-never-be-committed"
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: bad-lazy
+spec:
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+            - name: shredder
+              image: ghcr.io/abdou-uigjj/rtbf-shredder:dev
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop:
+                    - ALL

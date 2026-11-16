@@ -1,0 +1,24 @@
+---
+# the shredder pod never talks to the kubernetes api - erasure is a
+# filesystem + control-plane job. no token, no rbac, nothing to abuse.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: rtbf-shredder
+  namespace: rtbf
+  annotations:
+    kubernetes.io/service-account.name: rtbf-shredder
+automountServiceAccountToken: false
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: rtbf-vault
+  namespace: rtbf
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+  storageClassName: standard

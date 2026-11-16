@@ -1,0 +1,79 @@
+---
+# the shredder cronjob: runs the provable-gate erasure against the
+# mounted vault. hardened for the job it does - the one pod in the
+# fleet whose whole purpose is destroying bytes, so it gets the same
+# restrictions every other pod gets, plus read-only root and no api
+# token (it never talks to the kubernetes api).
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: rtbf-shredder
+  namespace: rtbf
+  labels:
+    app: rtbf-shredder
+spec:
+  schedule: "0 3 * * 1"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 5
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      template:
+        metadata:
+          labels:
+            app: rtbf-shredder
+        spec:
+          automountServiceAccountToken: false
+          restartPolicy: Never
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65532
+            runAsGroup: 65532
+            fsGroup: 65532
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+            - name: shredder
+              image: ghcr.io/abdou-uigjj/rtbf-shredder:v1.0.0
+              imagePullPolicy: IfNotPresent
+              args:
+                - python3
+                - -m
+                - shredder.cli
+                - --config
+                - /config/engines.yaml
+                - --ledger
+                - /vault/ledger.jsonl
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                privileged: false
+                capabilities:
+                  drop:
+                    - ALL
+              resources:
+                requests:
+                  memory: 128Mi
+                  cpu: 100m
+                limits:
+                  memory: 512Mi
+                  cpu: "1"
+              volumeMounts:
+                - name: vault
+                  mountPath: /vault
+                - name: config
+                  mountPath: /config
+                  readOnly: true
+                - name: tmp
+                  mountPath: /tmp
+          volumes:
+            - name: vault
+              persistentVolumeClaim:
+                claimName: rtbf-vault
+            - name: config
+              configMap:
+                name: shredder-config
+            - name: tmp
+              emptyDir:
+                medium: Memory

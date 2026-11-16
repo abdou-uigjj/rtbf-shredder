@@ -1,0 +1,31 @@
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: rtbf
+  labels:
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: latest
+---
+# the erasure configmap: schedule + engine wiring. no secrets here -
+# keys are injected by the operator at runtime and never sit in etcd.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: shredder-config
+  namespace: rtbf
+data:
+  schedule.yaml: |
+    # gdpr art. 17 responses run on intake, but the weekly sweep catches
+    # any subject whose erasure window expired while the job was down
+    cron: "0 3 * * 1"
+    timezone: UTC
+  engines.yaml: |
+    db: /vault/clinic.db
+    table: patients
+    columns:
+      - name
+      - notes
+    envelope_root: /vault/envelopes
+    aws_root: /vault/aws
+    bucket: clinic-export
