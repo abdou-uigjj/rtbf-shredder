@@ -1,0 +1,4 @@
+# rtbf-shredder
+
+pynacl
+pytest
