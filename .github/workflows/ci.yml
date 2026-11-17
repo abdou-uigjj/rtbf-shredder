@@ -1,0 +1,84 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: yaml lint
+        run: |
+          pip install yamllint
+          yamllint k8s/ examples/ .github/
+
+      - name: shell lint
+        run: shellcheck scripts/*.sh
+
+      - name: policies accept the real manifests
+        run: |
+          curl -sSL -o /tmp/conftest.tgz https://github.com/open-policy-agent/conftest/releases/download/v0.56.0/conftest_0.56.0_Linux_x86_64.tar.gz
+          tar -xzf /tmp/conftest.tgz -C /tmp conftest
+          /tmp/conftest test k8s/ --policy policy/
+
+      - name: policies reject the bad fixtures
+        run: |
+          if /tmp/conftest test examples/policy-negative/ --policy policy/ >/dev/null 2>&1; then
+            echo "the bad manifests passed - the policies guard nothing"
+            exit 1
+          fi
+          echo "bad fixtures correctly rejected"
+
+      - name: terraform gates
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.9.8
+          terraform_wrapper: false
+      - run: cd terraform && terraform fmt -check -recursive
+      - run: cd terraform && terraform init -backend=false && terraform validate
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: install deps
+        run: pip install -r requirements.txt
+      - name: unit tests
+        run: python3 -m pytest tests/ -q
+
+  drill:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: install deps
+        run: pip install -r requirements.txt
+      - name: rtbf provable gate
+        run: python3 drill/rtbf_drill.py
+
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: install deps
+        run: pip install -r requirements.txt
+      - name: build the lambda package
+        run: python3 scripts/build_lambda_zip.py
+      - name: the lambda handler imports and answers a bad event
+        run: python3 -c "import importlib.util, sys; sys.path.insert(0, '.'); spec = importlib.util.spec_from_file_location('handler', 'lambda/handler.py'); m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m); r = m.handler({}); assert r['statusCode'] == 400, r"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: lambda-responder
+          path: lambda.zip
