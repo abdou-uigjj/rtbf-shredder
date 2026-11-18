@@ -46,7 +46,7 @@ into a canonical JSON body. Verified offline by `tools/verify_cert.py`.
 
 **drill/rtbf_drill.py** — the provable gate. Seeds three subjects,
 runs the naive-delete trap, then the shredder, then attacks both, then
-verifies the ledger and certificate. `PROOF HOLDS` requires all thirteen
+verifies the ledger and certificate. `PROOF HOLDS` requires all fourteen
 assertions.
 
 ## data flow
