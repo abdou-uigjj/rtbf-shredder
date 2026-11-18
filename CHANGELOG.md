@@ -19,7 +19,7 @@ first release.
 * erasure certificate: ed25519-signed, bound to the ledger head,
   carries pseudonyms only, verified offline by tools/verify_cert.py.
 * drill: the provable gate - naive-delete trap, shredder erasure,
-  surgical check, ledger tamper test, certificate check. 13 assertions.
+  surgical check, ledger tamper test, certificate check. 14 assertions.
 * lambda responder + terraform pipeline (kms, s3, dynamodb, iam,
   weekly sweep, error alarm).
 * k8s cronjob sweep with conftest policy pack (175 assertions) and

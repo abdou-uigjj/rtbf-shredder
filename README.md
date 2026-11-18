@@ -12,16 +12,17 @@ We do not claim deletion. We prove non-recovery.
 ```
 $ python3 drill/rtbf_drill.py
 == world 1: naive delete (the trap) ==
-  PASS  naive-delete-recoverable     attacker recovered 15 fragments (615 bytes) after plain DELETE
+  PASS  naive-delete-recoverable     attacker recovered 55 fragments after plain DELETE (15 in db, 40 in the forgotten export csv)
 == world 2: shredder erasure of subject b ==
-  PASS  sqlite-recovery-zero         attacker found 0 fragments in db + sidecars (0.01s)
+  PASS  sqlite-recovery-zero         attacker found 0 fragments in db + sidecars (0.00s)
+  PASS  export-shredded              the forgotten csv copy is gone - byte-level
   PASS  envelope-crypto-shred        plaintext never touched disk (sealed); keys + boxes now destroyed
   PASS  aws-crypto-shred             wrapped data key destroyed; 3 chart versions scrubbed from the bucket
   PASS  surgical-others-intact       subjects a and c: 80/80 rows untouched
 == world 3: ledger and certificate ==
-  PASS  ledger-chain-valid           4 entries, head 2abfac369a0b...
-  PASS  certificate-valid            ed25519 signature ok (868ba20a...)
-== verdict: PROOF HOLDS (13 passed, 0 failed) ==
+  PASS  ledger-chain-valid           5 entries, head e8be8f7d8973...
+  PASS  certificate-valid            ed25519 signature ok (2cf30039...)
+== verdict: PROOF HOLDS (14 passed, 0 failed) ==
 ```
 
 A plain `DELETE FROM` leaves the subject's bytes in freelist pages and
@@ -42,7 +43,7 @@ surgical, not scorched earth.
 | `shredder/attacker.py` | the recovery attacker: raw byte carving over db + sidecars + trees |
 | `shredder/ledger.py` | append-only hash-chained ledger of every erasure receipt |
 | `shredder/cert.py` | ed25519-signed erasure certificate bound to the ledger head |
-| `drill/rtbf_drill.py` | the provable gate: 13 assertions or `PROOF FAILS` |
+| `drill/rtbf_drill.py` | the provable gate: 14 assertions or `PROOF FAILS` |
 | `tools/verify_cert.py` | what the data subject runs to check their receipt |
 
 ## quickstart
