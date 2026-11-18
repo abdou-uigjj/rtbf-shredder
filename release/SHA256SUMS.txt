@@ -1,0 +1,3 @@
+7c9cb099c023a1b8699fa24e6edc32005d0b20159bdd6b43df0c0fcbba772bf7  rtbf-shredder-1.0.0.zip
+b8a6ec5bbddabb6410be26c3d028931197f8278477c1993f066c35330bd0a783  rtbf-shredder-1.0.0.tar.gz
+f99d1148bae9987d740c2503cb6676e1ea379017aecc735a9e63d59be0f60b5c  rtbf-shredder-1.0.0.tar.xz

@@ -58,6 +58,12 @@ class SqliteEngine:
         conn = sqlite3.connect(path)
         conn.row_factory = sqlite3.Row
         try:
+            # sqlite builds differ: some compile with secure_delete (which
+            # zeroes freed content for us), some do not. we do not rely on
+            # either behavior - the in-place overwrite below is the layer
+            # that must work - but enabling it costs nothing and adds one
+            # more wall between the subject's bytes and a later reader.
+            conn.execute("pragma secure_delete=on")
             # 1. locate the subject's rows
             where = " or ".join(f"{c} like ?" for c in columns)
             args = [f"%{marker}%"] * len(columns)

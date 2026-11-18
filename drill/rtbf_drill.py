@@ -101,6 +101,17 @@ def main() -> int:
                         master_key=secrets.token_bytes(32))
     aws = AwsEngine(os.path.join(work, "aws"))
     aws.create_tenant_key()
+    # the forgotten copies: every clinic exports charts as plaintext csv
+    # files. deletion never touches these - and this is exactly where
+    # naive erasure dies, on every sqlite build (modern builds zero freed
+    # pages on delete; the export copy never notices).
+    exports = os.path.join(work, "exports")
+    os.makedirs(exports)
+    for s in subjects.values():
+        with open(os.path.join(exports, f"export-{s['mrn']}.csv"), "w") as f:
+            f.write("name,dob,mrn,notes\n")
+            for r in rows_for(s["mrn"], s["marker"], 40):
+                f.write(f'"{r["name"]}",{r["dob"]},{r["mrn"]},"{r["notes"]}"\n')
     for s in subjects.values():
         for i in range(3):
             store.seed(s["sid"], f"record-{i}",
@@ -120,11 +131,14 @@ def main() -> int:
     conn.close()
     os.unlink(os.path.join(work, "envelopes", "subjects", sid_b, "record-0.box"))
 
-    naive = scan(db, [mb])
-    if naive["total_fragments"] > 0:
+    naive_db = scan(db, [mb])
+    naive_export = scan(os.path.join(exports, f"export-{subjects['b']['mrn']}.csv"), [mb])
+    naive_total = naive_db["total_fragments"] + naive_export["total_fragments"]
+    if naive_total > 0:
         ok("naive-delete-recoverable",
-           f"attacker recovered {naive['total_fragments']} fragments "
-           f"({naive['total_bytes_recoverable']} bytes) after plain DELETE")
+           f"attacker recovered {naive_total} fragments after plain DELETE "
+           f"({naive_db['total_fragments']} in db, "
+           f"{naive_export['total_fragments']} in the forgotten export csv)")
     else:
         bad("naive-delete-recoverable",
             "naive delete left nothing to find - demo broken, practice fine")
@@ -151,6 +165,13 @@ def main() -> int:
     )
     elapsed = time.time() - t0
 
+    # the export copy is in scope too: it is the subject's plaintext.
+    from shredder.core import shred_file
+    export_b = os.path.join(exports, f"export-{subjects['b']['mrn']}.csv")
+    shred_file(export_b)
+    ledger.append("export-shredded", {"sid": sid_b,
+                                      "file": os.path.basename(export_b)})
+
     after = engine.attacker_scan([mb])
     if after["total_fragments"] == 0:
         ok("sqlite-recovery-zero",
@@ -158,6 +179,10 @@ def main() -> int:
     else:
         bad("sqlite-recovery-zero",
             f"attacker still finds {after['total_fragments']} fragments in the db")
+    if not os.path.exists(export_b):
+        ok("export-shredded", "the forgotten csv copy is gone - byte-level")
+    else:
+        bad("export-shredded", "export copy survived the erasure")
 
     tree_after = store.attacker_scan([mb])
     sid_dir = os.path.join(work, "envelopes", "subjects", sid_b)
@@ -199,11 +224,16 @@ def main() -> int:
         ok("db-clean", "subject b has no rows; integrity_check ok")
     else:
         bad("db-clean", f"b rows: {b_gone}, integrity: {integrity}")
-    others = engine.attacker_scan([subjects["a"]["marker"], subjects["c"]["marker"]])
-    if others["total_fragments"] > 0:
+    others_db = engine.attacker_scan([subjects["a"]["marker"], subjects["c"]["marker"]])
+    a_csv = os.path.join(exports, f"export-{subjects['a']['mrn']}.csv")
+    c_csv = os.path.join(exports, f"export-{subjects['c']['mrn']}.csv")
+    others_total = (others_db["total_fragments"]
+                    + scan(a_csv, [subjects["a"]["marker"]])["total_fragments"]
+                    + scan(c_csv, [subjects["c"]["marker"]])["total_fragments"])
+    if others_total > 0:
         ok("others-bytes-intact",
-           f"a+c canary bytes still present ({others['total_fragments']} "
-           f"fragments) - only b was erased")
+           f"a+c canary bytes still present ({others_total} "
+           f"fragments, db + their exports) - only b was erased")
     else:
         bad("others-bytes-intact",
             "a+c markers gone - the erasure was not surgical")

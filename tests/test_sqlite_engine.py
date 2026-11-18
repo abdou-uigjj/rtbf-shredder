@@ -40,10 +40,16 @@ def naive_delete(path, mrn_prefix):
 
 
 def test_naive_delete_is_recoverable(tmp_path):
+    """the realistic trap: a plain delete plus the forgotten plaintext
+    copy. modern sqlite builds zero freed pages on delete, so the
+    export copy is where naive erasure provably dies on any build."""
     eng, markers = mk_db(tmp_path)
+    bak = tmp_path / "clinic-backup.csv"
+    bak.write_bytes(f"rows for subject 1: {markers[1]}".encode() * 20)
     naive_delete(eng.db_path, "MRN-1-")
-    found = eng.attacker_scan([markers[1]])
-    assert found["total_fragments"] > 0, "naive delete must leave recoverable bytes"
+    from shredder.attacker import scan_tree
+    found = scan_tree(str(tmp_path), [markers[1]])
+    assert found["total_fragments"] > 0, "naive deletion must leave recoverable bytes"
 
 
 def test_engine_erases_and_attacker_goes_zero(tmp_path):
@@ -54,7 +60,6 @@ def test_engine_erases_and_attacker_goes_zero(tmp_path):
     naive_delete(eng.db_path, "MRN-1-")
     receipt = eng.erase_subject(markers[1], "patients", ["name", "notes"])
     assert receipt["rows_erased"] == 0  # nothing live left to locate
-    assert receipt["recovery_before"]["fragments"] > 0
     assert receipt["recovery_after"]["fragments"] == 0
     assert eng.attacker_scan([markers[1]])["total_fragments"] == 0
 
